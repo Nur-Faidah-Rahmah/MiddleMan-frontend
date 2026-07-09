@@ -1,116 +1,171 @@
 import React from 'react';
-import { Star, Clock, Coins, ShieldAlert } from 'lucide-react';
+import { Coins, Clock, Star, ShieldAlert } from 'lucide-react';
 import { Quest } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
 
 interface QuestCardProps {
   quest: Quest;
   onClick: (quest: Quest) => void;
+  /** Extra CSS class(es) for bento sizing */
+  sizeClass?: string;
+  /** Show the gold star decoration (featured top-left accent) */
+  showStarDeco?: boolean;
 }
 
-export function QuestCard({ quest, onClick }: QuestCardProps) {
-  const isFeatured = quest.isFeatured;
-  
-  const rankColors = {
-    'S': 'text-purple-400 border-purple-400/30 bg-purple-400/10',
-    'A': 'text-rpg-gold border-rpg-gold/30 bg-rpg-gold/10',
-    'B': 'text-blue-400 border-blue-400/30 bg-blue-400/10',
-    'C': 'text-green-400 border-green-400/30 bg-green-400/10',
-  };
+const rankColors: Record<string, { border: string; text: string; bg: string }> = {
+  S: { border: '#a78bfa', text: '#a78bfa', bg: 'rgba(167,139,250,0.15)' },
+  A: { border: '#d4a843', text: '#d4a843', bg: 'rgba(212,168,67,0.15)' },
+  B: { border: '#60a5fa', text: '#60a5fa', bg: 'rgba(96,165,250,0.15)' },
+  C: { border: '#4ade80', text: '#4ade80', bg: 'rgba(74,222,128,0.15)' },
+};
 
-  const getStatusBadge = (status: Quest['status']) => {
-    switch (status) {
-      case 'OPEN': return null;
-      case 'IN_PROGRESS': 
-        return <span className="absolute top-2 left-2 text-xs font-bold px-2 py-1 bg-blue-500/20 text-blue-300 border border-blue-500/50 rounded backdrop-blur-sm">IN PROGRESS</span>;
-      case 'ESCROW_LOCKED':
-        return <span className="absolute top-2 left-2 text-xs font-bold px-2 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/50 rounded backdrop-blur-sm">IN ESCROW</span>;
-      case 'COMPLETED':
-        return <span className="absolute top-2 left-2 text-xs font-bold px-2 py-1 bg-green-500/20 text-green-300 border border-green-500/50 rounded backdrop-blur-sm">COMPLETED</span>;
-    }
-  };
+const statusLabel: Record<Quest['status'], string | null> = {
+  OPEN: null,
+  IN_PROGRESS: 'IN PROGRESS',
+  ESCROW_LOCKED: 'IN ESCROW',
+  COMPLETED: 'COMPLETED',
+};
 
+const statusColors: Record<Quest['status'], string> = {
+  OPEN: '',
+  IN_PROGRESS: 'rgba(96,165,250,0.85)',
+  ESCROW_LOCKED: 'rgba(251,191,36,0.85)',
+  COMPLETED: 'rgba(74,222,128,0.85)',
+};
+
+export function QuestCard({ quest, onClick, sizeClass = 'sq-card-md', showStarDeco = false }: QuestCardProps) {
   const daysLeft = Math.ceil((new Date(quest.deadline).getTime() - Date.now()) / (1000 * 3600 * 24));
   const isUrgent = daysLeft <= 1 && quest.status === 'OPEN';
+  const rank = rankColors[quest.rank] ?? rankColors['C'];
+  const label = statusLabel[quest.status];
+  const labelColor = statusColors[quest.status];
 
   return (
-    <div 
+    <div
+      className={`sq-job-card sq-animate-in ${sizeClass}`}
       onClick={() => onClick(quest)}
-      className={`relative group bg-rpg-card rounded-lg p-5 cursor-pointer transition-all duration-300 hover:-translate-y-1 hover:shadow-xl ${
-        isFeatured 
-          ? 'border-2 border-rpg-gold shadow-[0_0_15px_rgba(255,215,0,0.15)] hover:shadow-[0_0_25px_rgba(255,215,0,0.3)]' 
-          : 'border border-rpg-board hover:border-slate-400'
-      } ${quest.status !== 'OPEN' ? 'opacity-80 hover:opacity-100' : ''}`}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => e.key === 'Enter' && onClick(quest)}
     >
-      {/* Featured Ribbon */}
-      {isFeatured && (
-        <div className="absolute -top-3 -right-3 bg-gradient-to-r from-rpg-gold to-yellow-600 text-rpg-navy text-xs font-bold px-3 py-1 rounded shadow-lg flex items-center gap-1 z-10 border border-yellow-200 rotate-3 group-hover:rotate-6 transition-transform">
-          <Star className="w-3 h-3 fill-rpg-navy" />
-          FEATURED BOUNTY
+      {/* Gold star decoration (only on first featured card) */}
+      {showStarDeco && (
+        <div className="sq-star-deco">
+          <svg width="52" height="52" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <polygon
+              points="26,4 30,20 46,20 33,30 38,46 26,36 14,46 19,30 6,20 22,20"
+              fill="none"
+              stroke="#d4a843"
+              strokeWidth="2"
+              strokeLinejoin="round"
+            />
+            {/* Inner lines for the geometric star style */}
+            <line x1="26" y1="4" x2="26" y2="48" stroke="#d4a843" strokeWidth="1" opacity="0.5" />
+            <line x1="4" y1="26" x2="48" y2="26" stroke="#d4a843" strokeWidth="1" opacity="0.5" />
+          </svg>
         </div>
       )}
 
-      {getStatusBadge(quest.status)}
+      {/* Status badge */}
+      {label && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 14,
+            left: showStarDeco ? 44 : 14,
+            background: labelColor,
+            backdropFilter: 'blur(4px)',
+            borderRadius: 6,
+            padding: '3px 10px',
+            fontSize: '0.65rem',
+            fontWeight: 700,
+            color: '#fff',
+            letterSpacing: '0.05em',
+            zIndex: 10,
+          }}
+        >
+          {label}
+        </div>
+      )}
 
-      <div className="flex justify-between items-start mb-3 mt-4">
-        <div className="flex gap-2 items-center flex-wrap">
-          <span className="text-xs font-medium px-2 py-1 rounded bg-rpg-navy text-slate-300 border border-slate-600">
-            {quest.category}
+      {/* Featured ribbon */}
+      {quest.isFeatured && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 14,
+            right: 14,
+            background: 'linear-gradient(135deg, #d4a843, #e8c060)',
+            color: '#253047',
+            fontSize: '0.6rem',
+            fontWeight: 800,
+            letterSpacing: '0.08em',
+            padding: '3px 10px',
+            borderRadius: 999,
+            zIndex: 10,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+          }}
+        >
+          <Star size={9} fill="#253047" />
+          FEATURED
+        </div>
+      )}
+
+      {/* Rank badge — top center */}
+      <div
+        className="card-badge"
+        style={{
+          position: 'absolute',
+          top: 14,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          borderColor: rank.border,
+          color: rank.text,
+          background: rank.bg,
+          zIndex: 10,
+        }}
+      >
+        RANK {quest.rank}
+      </div>
+
+      {/* Urgent indicator */}
+      {isUrgent && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+            color: '#fca5a5',
+            fontSize: '0.7rem',
+            fontWeight: 700,
+            letterSpacing: '0.06em',
+            animation: 'pulse 1.5s infinite',
+          }}
+        >
+          <ShieldAlert size={12} />
+          URGENT
+        </div>
+      )}
+
+      {/* Bottom content overlay */}
+      <div className="card-content">
+        <div className="card-title">{quest.title}</div>
+        <div className="card-meta" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <Coins size={11} style={{ color: '#d4a843' }} />
+            <span style={{ color: '#d4a843', fontWeight: 700 }}>{formatCurrency(quest.bounty)}</span>
           </span>
-          <span className={`text-xs font-bold px-2 py-1 rounded border ${rankColors[quest.rank]}`}>
-            Rank {quest.rank}
+          <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+            <Clock size={10} />
+            {daysLeft > 0 ? `${daysLeft}d left` : 'Expired'}
           </span>
         </div>
-        
-        {isUrgent && (
-          <div className="flex items-center gap-1 text-red-400 text-xs font-bold animate-pulse">
-            <ShieldAlert className="w-3 h-3" />
-            URGENT
-          </div>
-        )}
-      </div>
-
-      <h3 className="font-serif text-xl font-bold text-white mb-2 line-clamp-2 group-hover:text-rpg-gold transition-colors">
-        {quest.title}
-      </h3>
-      
-      <p className="text-sm text-slate-400 mb-4 line-clamp-2">
-        {quest.description}
-      </p>
-
-      {/* Requester Info */}
-      <div className="flex items-center gap-2 mb-4 bg-rpg-navy/50 p-2 rounded-md">
-        <img src={quest.requester.avatarUrl} alt={quest.requester.username} className="w-6 h-6 rounded-full border border-slate-500" />
-        <span className="text-xs text-slate-300 font-medium">{quest.requester.username}</span>
-        <div className="flex items-center ml-auto gap-1">
-          <Star className="w-3 h-3 fill-yellow-500 text-yellow-500" />
-          <span className="text-xs text-slate-300">{quest.requester.rating}</span>
-        </div>
-      </div>
-
-      {/* Footer */}
-      <div className="flex items-end justify-between mt-auto pt-2 border-t border-slate-600/50">
-        <div className="flex flex-col">
-          <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wider mb-1">Bounty Reward</span>
-          <div className="flex items-center gap-1.5">
-            <Coins className="w-5 h-5 text-rpg-gold" />
-            <span className="font-bold text-lg text-amber-50">
-              {formatCurrency(quest.bounty)}
-            </span>
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-1 text-xs text-slate-400">
-          <Clock className="w-3 h-3" />
-          <span>{daysLeft > 0 ? `${daysLeft} days left` : 'Expired'}</span>
-        </div>
-      </div>
-      
-      {/* Hover Action */}
-      <div className="absolute inset-x-0 -bottom-4 opacity-0 group-hover:opacity-100 group-hover:bottom-4 transition-all duration-300 flex justify-center pointer-events-none">
-        <button className="bg-rpg-accent/90 backdrop-blur text-white text-sm font-bold py-2 px-6 rounded-full shadow-[0_0_15px_rgba(49,130,206,0.5)] border border-blue-400/50 pointer-events-auto hover:bg-blue-500">
-          {quest.status === 'OPEN' ? 'Ambil Quest' : 'Lihat Detail'}
-        </button>
       </div>
     </div>
   );

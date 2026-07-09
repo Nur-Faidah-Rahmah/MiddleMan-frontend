@@ -98,11 +98,26 @@ function App() {
   };
 
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center bg-rpg-navy text-rpg-gold font-cinzel text-xl">Loading...</div>;
+    return (
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'linear-gradient(135deg, #253047 0%, #2e3a5a 50%, #253558 100%)',
+        color: '#3a9e9e',
+        fontFamily: "'Syne', sans-serif",
+        fontSize: '1.25rem',
+        fontWeight: 700,
+        letterSpacing: '0.1em',
+      }}>
+        Loading...
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen flex flex-col relative bg-rpg-navy font-sans">
+    <div className="min-h-screen flex flex-col relative font-sans" style={{ background: 'linear-gradient(135deg, #253047 0%, #2e3a5a 50%, #253558 100%)' }}>
       <Navbar 
         user={user} 
         onCreateQuestClick={handleCreateClick}
