@@ -1,0 +1,37 @@
+@import "tailwindcss";
+
+@theme {
+  --color-rpg-navy: #1a202c;
+  --color-rpg-gold: #ffd700;
+  --color-rpg-gold-light: #ffe033;
+  --color-rpg-gold-dark: #ccac00;
+  --color-rpg-board: #2d3748;
+  --color-rpg-card: #4a5568;
+  --color-rpg-accent: #3182ce;
+  
+  --font-sans: "Inter", sans-serif;
+  --font-serif: "Cinzel", serif;
+}
+
+@layer base {
+  body {
+    @apply bg-rpg-navy text-slate-200 font-sans;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-serif;
+  }
+}
+
+/* Custom scrollbar for RPG feel */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  @apply bg-rpg-navy;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-rpg-card rounded-full border border-rpg-board;
+}
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-rpg-gold/50;
+}
