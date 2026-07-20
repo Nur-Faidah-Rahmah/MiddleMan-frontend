@@ -1,8 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { authApi } from '../api/auth';
-import api from '../lib/axios';
 import { UserProfile } from '../types';
-import { mapUserToProfile } from '../api/mappers';
 import {
   getSimulatedCurrentUser,
   setSimulatedCurrentUser,
@@ -16,6 +13,7 @@ interface AuthContextType {
   login: (credentials: any) => Promise<void>;
   register: (data: any) => Promise<void>;
   logout: () => Promise<void>;
+  refreshUser: () => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -24,6 +22,7 @@ const AuthContext = createContext<AuthContextType>({
   login: async () => {},
   register: async () => {},
   logout: async () => {},
+  refreshUser: () => {},
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -42,39 +41,65 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(false);
   };
 
+  const refreshUser = () => {
+    const simulatedUser = getSimulatedCurrentUser();
+    setUser(simulatedUser);
+  };
+
   const login = async (credentials: any) => {
     const users = getSimulatedUsersList();
-    let found = users.find(u => u.username.toLowerCase() === credentials.email.split('@')[0].toLowerCase());
+    const loginKey = credentials.email.trim().toLowerCase();
+    const password = credentials.password;
+
+    const found = users.find(u => 
+      (u.email?.toLowerCase() === loginKey || u.username.toLowerCase() === loginKey) && 
+      u.password === password
+    );
+
     if (!found) {
-      found = {
-        id: `u-${Date.now()}`,
-        username: credentials.email.split('@')[0] || 'QuestGiver',
-        avatarUrl: `https://api.dicebear.com/7.x/adventurer/svg?seed=${credentials.email}`,
-        level: 1,
-        exp: 0,
-        expToNextLevel: 1000,
-        walletBalance: 250000,
-        rating: 4.8,
-      };
-      saveSimulatedUsersList([...users, found]);
+      throw new Error('Email/Username atau Password tidak cocok dengan database lokal kami.');
     }
+
+    if (found.isBanned) {
+      throw new Error('Akun Anda telah dinonaktifkan (Banned) oleh Administrator.');
+    }
+
     setSimulatedCurrentUser(found);
     setUser(found);
   };
 
   const register = async (data: any) => {
+    const users = getSimulatedUsersList();
+    const usernameNorm = data.username.trim().toLowerCase();
+    const emailNorm = data.email.trim().toLowerCase();
+
+    const exists = users.some(u => 
+      u.username.toLowerCase() === usernameNorm || 
+      (u.email && u.email.toLowerCase() === emailNorm)
+    );
+
+    if (exists) {
+      throw new Error('Username atau Email sudah terdaftar di sistem.');
+    }
+
     const newUser: UserProfile = {
       id: `u-${Date.now()}`,
-      username: data.name,
-      avatarUrl: `https://api.dicebear.com/7.x/adventurer/svg?seed=${data.name}`,
+      username: data.username,
+      email: data.email,
+      password: data.password,
+      role: data.role || 'user',
+      avatarUrl: `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(data.username)}`,
       level: 1,
       exp: 0,
       expToNextLevel: 1000,
-      walletBalance: data.role_id === 2 ? 1000000 : 0,
+      walletBalance: data.role === 'admin' ? 10000000 : 5000000, // Rp 10M for Admin, Rp 5M for Client
       rating: 5.0,
+      completedJobsCount: 0,
+      hasService: false,
     };
-    const users = getSimulatedUsersList();
-    saveSimulatedUsersList([...users, newUser]);
+
+    const updatedUsers = [...users, newUser];
+    saveSimulatedUsersList(updatedUsers);
     setSimulatedCurrentUser(newUser);
     setUser(newUser);
   };
@@ -85,7 +110,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

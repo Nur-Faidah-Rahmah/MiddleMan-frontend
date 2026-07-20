@@ -9,6 +9,9 @@ import { useAuth } from './context/AuthContext';
 import { jobsApi } from './api/jobs';
 import { Quest } from './types';
 import ProfilePage from './screens/ProfilePage';
+import AuthScreen from './screens/AuthScreen';
+import AdminDashboard from './screens/AdminDashboard';
+import { WorkerProfileModal } from './components/modals/WorkerProfileModal';
 
 function AppContent() {
   const { user, loading, logout } = useAuth();
@@ -17,12 +20,21 @@ function AppContent() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedQuestId, setSelectedQuestId] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [selectedWorkerUsername, setSelectedWorkerUsername] = useState<string | null>(null);
+  const [selectedWorkerAvatar, setSelectedWorkerAvatar] = useState<string | undefined>(undefined);
+
+  const handleUserClick = (username: string, avatarUrl?: string) => {
+    setSelectedWorkerUsername(username);
+    setSelectedWorkerAvatar(avatarUrl);
+  };
 
   const selectedQuest = quests.find(q => q.id === selectedQuestId);
 
   useEffect(() => {
-    fetchQuests();
-  }, []);
+    if (user) {
+      fetchQuests();
+    }
+  }, [user]);
 
   const fetchQuests = async () => {
     try {
@@ -34,39 +46,80 @@ function AppContent() {
   };
 
   // Actions
-  const handleAcceptQuest = async (questId: string) => {
+  const handleApplyQuest = async (questId: string) => {
     if (!user) return;
     try {
-      await jobsApi.takeJob(questId);
+      await jobsApi.applyJob(questId);
       await fetchQuests(); // Refresh data
-      setSelectedQuestId(null);
-    } catch (error) {
-      console.error("Failed to accept quest", error);
-      alert("Gagal mengambil quest");
+    } catch (error: any) {
+      console.error("Failed to apply for quest", error);
+      alert(error.message || "Gagal mendaftar quest");
     }
   };
 
-  const handleSubmitProof = async (questId: string) => {
+  const handleApproveApplicant = async (questId: string, applicantId: string) => {
     if (!user) return;
     try {
-      // Assuming completing is the same as submitting proof for now
-      await jobsApi.completeJob(questId);
+      await jobsApi.approveApplicant(questId, applicantId);
+      await fetchQuests();
+    } catch (error) {
+      console.error("Failed to approve applicant", error);
+      alert("Gagal menyetujui pekerja");
+    }
+  };
+
+  const handleSubmitProof = async (questId: string, notes: string, link?: string) => {
+    if (!user) return;
+    try {
+      await jobsApi.submitProof(questId, notes, link);
       await fetchQuests();
     } catch (error) {
       console.error("Failed to submit proof", error);
-      alert("Gagal menyelesaikan quest");
+      alert("Gagal menyerahkan bukti pekerjaan");
     }
   };
 
   const handleApproveWork = async (questId: string) => {
     if (!user) return;
     try {
-      // The backend uses 'verify' for admin, but for customer it might be different.
-      // We will refresh for now.
+      await jobsApi.approveWork(questId);
       await fetchQuests();
-      setSelectedQuestId(null);
     } catch (error) {
       console.error("Failed to approve work", error);
+      alert("Gagal menyetujui pekerjaan");
+    }
+  };
+
+  const handleFileDispute = async (questId: string, reason: string) => {
+    if (!user) return;
+    try {
+      await jobsApi.fileDispute(questId, reason);
+      await fetchQuests();
+    } catch (error) {
+      console.error("Failed to file dispute", error);
+      alert("Gagal mengajukan dispute");
+    }
+  };
+
+  const handleResolveDispute = async (questId: string, decision: 'WORKER_WON' | 'REQUESTER_WON') => {
+    if (!user) return;
+    try {
+      await jobsApi.resolveDispute(questId, decision);
+      await fetchQuests();
+    } catch (error) {
+      console.error("Failed to resolve dispute", error);
+      alert("Gagal menyelesaikan dispute");
+    }
+  };
+
+  const handleClaimToken = async (questId: string) => {
+    if (!user) return;
+    try {
+      await jobsApi.claimToken(questId);
+      await fetchQuests();
+    } catch (error) {
+      console.error("Failed to claim token", error);
+      alert("Gagal mengklaim token");
     }
   };
 
@@ -77,14 +130,18 @@ function AppContent() {
         title: questData.title,
         description: questData.description,
         price: questData.bounty,
-        category_id: 1, // Default to 1 since frontend doesn't choose category ID yet
-        deadline: questData.deadline || new Date(Date.now() + 86400000).toISOString().split('T')[0]
+        category: questData.category || 'Dev',
+        deadline: questData.deadline || new Date(Date.now() + 86400000).toISOString(),
+        isOnline: questData.isOnline !== undefined ? questData.isOnline : true,
+        priceUnit: questData.priceUnit || 'proyek',
+        termsAndConditions: questData.termsAndConditions || 'Selesaikan pekerjaan sesuai spesifikasi dan unggah kode sumber final.',
+        subTags: questData.subTags || [questData.category || 'Dev']
       });
       await fetchQuests();
       setIsCreateModalOpen(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to create quest", error);
-      alert("Gagal membuat quest");
+      alert(error.message || "Gagal membuat quest");
     }
   };
 
@@ -113,6 +170,10 @@ function AppContent() {
     );
   }
 
+  if (!user) {
+    return <AuthScreen />;
+  }
+
   return (
     <div className="min-h-screen flex flex-col relative font-sans">
       <Navbar 
@@ -130,9 +191,11 @@ function AppContent() {
               currentUserId={user?.id || ''}
               searchQuery={searchQuery}
               onQuestClick={(quest) => setSelectedQuestId(quest.id)}
+              onUserClick={handleUserClick}
             />
           } />
           <Route path="/profile" element={user ? <ProfilePage /> : <Navigate to="/" />} />
+          <Route path="/admin" element={user && user.role === 'admin' ? <AdminDashboard onRefreshQuests={fetchQuests} /> : <Navigate to="/" />} />
         </Routes>
       </main>
 
@@ -144,15 +207,32 @@ function AppContent() {
           quest={selectedQuest} 
           currentUserId={user?.id || ''}
           onClose={() => setSelectedQuestId(null)}
-          onAccept={handleAcceptQuest}
+          onAccept={handleApplyQuest}
+          onApproveApplicant={handleApproveApplicant}
           onSubmitProof={handleSubmitProof}
           onApproveWork={handleApproveWork}
+          onFileDispute={handleFileDispute}
+          onResolveDispute={handleResolveDispute}
+          onClaimToken={handleClaimToken}
+          onUserClick={handleUserClick}
         />
       )}
       {isCreateModalOpen && (
         <CreateQuestModal 
           onClose={() => setIsCreateModalOpen(false)}
           onCreate={handleCreateQuest}
+        />
+      )}
+      {selectedWorkerUsername && (
+        <WorkerProfileModal
+          username={selectedWorkerUsername}
+          avatarUrl={selectedWorkerAvatar}
+          currentUserId={user?.id || ''}
+          onClose={() => {
+            setSelectedWorkerUsername(null);
+            setSelectedWorkerAvatar(undefined);
+          }}
+          onHireSuccess={fetchQuests}
         />
       )}
     </div>

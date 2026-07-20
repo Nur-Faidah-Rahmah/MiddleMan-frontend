@@ -6,9 +6,10 @@ import { formatCurrency } from '../../utils/formatters';
 interface QuestCardProps {
   quest: Quest;
   onClick: (quest: Quest) => void;
+  onUserClick?: (username: string, avatarUrl?: string) => void;
 }
 
-export function QuestCard({ quest, onClick }: QuestCardProps) {
+export function QuestCard({ quest, onClick, onUserClick }: QuestCardProps) {
   return (
     <div
       className="group bg-[#3a4475] hover:bg-[#434e80] border border-[#3e4875] rounded-lg p-5 cursor-pointer transition-all duration-300 flex flex-col justify-between select-none h-full"
@@ -53,14 +54,20 @@ export function QuestCard({ quest, onClick }: QuestCardProps) {
       {/* Footer: User profile & Price block */}
       <div className="flex items-center justify-between mt-auto pt-2 border-t border-[#3e4875]">
         {/* Requester Info */}
-        <div className="flex items-center gap-2">
+        <div 
+          className="flex items-center gap-2 cursor-pointer hover:opacity-85 transition-all"
+          onClick={(e) => {
+            e.stopPropagation();
+            onUserClick?.(quest.requester.username, quest.requester.avatarUrl);
+          }}
+        >
           <img
             src={quest.requester.avatarUrl}
             alt={quest.requester.username}
             referrerPolicy="no-referrer"
-            className="w-6 h-6 rounded-full object-cover"
+            className="w-6 h-6 rounded-full object-cover border border-white/10"
           />
-          <span className="text-[#8b93b8] text-xs">
+          <span className="text-[#8b93b8] text-xs font-medium hover:text-white transition-colors">
             {quest.requester.username}
           </span>
           <span className="text-[#f0c040] text-xs font-bold">

@@ -74,11 +74,31 @@ export const mockQuests: Quest[] = [
     priceUnit: 'video',
     subTags: ['Video', 'Editing', 'Reels'],
     requester: {
-      id: 'req-1',
+      id: 'u-1',
       username: 'Reza K.',
       avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80',
       rating: 4.9,
     },
+    termsAndConditions: 'Hasil video harus beresolusi minimal 1080p, 60fps, menggunakan sound effect non-copyright, dan dikirimkan maksimal pukul 18.00 WIB setiap harinya.',
+    escrowStatus: 'DEPOSITED',
+    applicants: [
+      {
+        id: 'w-2',
+        username: 'Lita M.',
+        avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=150&q=80',
+        rating: 4.8,
+        level: 10,
+        appliedAt: new Date(Date.now() - 3600000 * 2).toISOString(),
+      },
+      {
+        id: 'w-3',
+        username: 'Deni P.',
+        avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80',
+        rating: 4.9,
+        level: 15,
+        appliedAt: new Date(Date.now() - 3600000 * 5).toISOString(),
+      }
+    ]
   },
   {
     id: 'q-2',
@@ -99,6 +119,8 @@ export const mockQuests: Quest[] = [
       avatarUrl: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=150&q=80',
       rating: 4.7,
     },
+    termsAndConditions: 'Paket harus sampai dalam kondisi utuh dan aman. Wajib mengambil foto bukti serah terima dengan penerima.',
+    escrowStatus: 'DEPOSITED'
   },
   {
     id: 'q-3',
@@ -119,6 +141,8 @@ export const mockQuests: Quest[] = [
       avatarUrl: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=150&q=80',
       rating: 5.0,
     },
+    termsAndConditions: 'Menyerahkan 3 pilihan konsep logo awal. Diberikan jatah maksimal 2 kali revisi mayor. Menyerahkan file master Figma dan SVG.',
+    escrowStatus: 'DEPOSITED'
   },
   {
     id: 'q-4',

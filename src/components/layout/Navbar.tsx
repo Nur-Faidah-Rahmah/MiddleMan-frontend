@@ -58,6 +58,16 @@ export function Navbar({
 
       {/* Right Actions */}
       <div className="flex items-center gap-4">
+        {/* Admin Link */}
+        {user?.role === 'admin' && (
+          <Link 
+            to="/admin" 
+            className="border border-[#f0c040] text-[#f0c040] hover:bg-[#f0c040]/10 rounded-full font-bold text-sm px-5 py-2.5 transition-all cursor-pointer flex items-center gap-1.5"
+          >
+            <span>🛡️ Admin Panel</span>
+          </Link>
+        )}
+
         {/* Send Request Button */}
         <button 
           id="btn-send-request"
