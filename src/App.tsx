@@ -14,7 +14,7 @@ import AdminDashboard from './screens/AdminDashboard';
 import { WorkerProfileModal } from './components/modals/WorkerProfileModal';
 
 function AppContent() {
-  const { user, loading, logout } = useAuth();
+  const { user, loading, logout, refreshUser } = useAuth();
   
   const [quests, setQuests] = useState<Quest[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -138,6 +138,7 @@ function AppContent() {
         subTags: questData.subTags || [questData.category || 'Dev']
       });
       await fetchQuests();
+      refreshUser();
       setIsCreateModalOpen(false);
     } catch (error: any) {
       console.error("Failed to create quest", error);

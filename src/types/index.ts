@@ -18,6 +18,10 @@ export interface UserProfile {
   password?: string;
   role?: 'user' | 'admin';
   isBanned?: boolean;
+  phone?: string;
+  location?: string;
+  isVerified?: boolean;
+  skills?: string[];
 
   // Worker Service offering fields
   hasService?: boolean;

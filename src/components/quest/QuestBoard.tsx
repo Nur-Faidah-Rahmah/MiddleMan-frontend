@@ -74,6 +74,11 @@ export function QuestBoard({ quests, onQuestClick, currentUserId, searchQuery = 
 
   // Filtering quests
   const filteredQuests = quests.filter((quest) => {
+    // 0. Hide completed and cancelled quests from the main home page
+    if (quest.status === 'COMPLETED' || quest.status === 'CANCELLED') {
+      return false;
+    }
+
     // 1. Category Filter
     if (selectedCategory !== 'Semua' && quest.category !== selectedCategory) {
       return false;
@@ -369,6 +374,7 @@ export function QuestBoard({ quests, onQuestClick, currentUserId, searchQuery = 
                       quest={quest}
                       onClick={onQuestClick}
                       onUserClick={onUserClick}
+                      currentUserId={currentUserId}
                     />
                   ))}
                 </div>

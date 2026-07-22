@@ -5,7 +5,10 @@ import {
   getSimulatedQuests,
   saveSimulatedQuests,
   getSimulatedCurrentUser,
-  setSimulatedCurrentUser
+  setSimulatedCurrentUser,
+  getSimulatedUsersList,
+  addSimulatedNotification,
+  addSimulatedActivityLog
 } from './mockStorage';
 
 export const jobsApi = {
@@ -57,6 +60,20 @@ export const jobsApi = {
       applicants: []
     };
     saveSimulatedQuests([newQuest, ...quests]);
+
+    // Record Activity Log
+    addSimulatedActivityLog({
+      userId: user.id,
+      type: 'QUEST_POSTED',
+      title: 'Membuat Quest Baru',
+      description: `Mempublikasikan quest "${newQuest.title}" dengan deposit Escrow terkunci sebesar Rp ${bountyNum.toLocaleString('id-ID')}.`,
+      amount: bountyNum,
+      questId: newQuest.id,
+      category: 'QUEST',
+      status: 'SUCCESS',
+      icon: '📝'
+    });
+
     return newQuest;
   },
   
@@ -64,8 +81,10 @@ export const jobsApi = {
     const user = getSimulatedCurrentUser();
     if (!user) throw new Error("Must be logged in to apply");
     const quests = getSimulatedQuests();
+    let targetQuest: Quest | null = null;
     const updated = quests.map(q => {
       if (q.id === jobId) {
+        targetQuest = q;
         const applicants = q.applicants || [];
         const alreadyApplied = applicants.some(a => a.id === user.id);
         if (alreadyApplied) return q;
@@ -86,15 +105,48 @@ export const jobsApi = {
       return q;
     });
     saveSimulatedQuests(updated);
+
+    // Send notification to requester
+    if (targetQuest) {
+      const q: Quest = targetQuest;
+      addSimulatedNotification({
+        userId: q.requester.id,
+        title: `Pelamar Baru: ${user.username}`,
+        body: `${user.username} mengajukan lamaran untuk pekerjaan "${q.title}". Klik untuk meninjau detail quest dan pelamar.`,
+        icon: '📩',
+        questId: q.id,
+        type: 'APPLICATION',
+        senderName: user.username,
+        senderAvatar: user.avatarUrl
+      });
+
+      addSimulatedActivityLog({
+        userId: user.id,
+        type: 'QUEST_APPLIED',
+        title: 'Mengajukan Lamaran Quest',
+        description: `Mengirimkan lamaran pengerjaan untuk quest "${q.title}" (Bounty: Rp ${q.bounty.toLocaleString('id-ID')}).`,
+        amount: q.bounty,
+        questId: q.id,
+        category: 'QUEST',
+        status: 'PENDING',
+        icon: '📄'
+      });
+    }
+
     return { success: true };
   },
 
   approveApplicant: async (jobId: string, applicantId: string) => {
     const quests = getSimulatedQuests();
+    let targetQuest: Quest | null = null;
+    let assignedWorkerId = '';
+
     const updated = quests.map(q => {
       if (q.id === jobId) {
+        targetQuest = q;
         // Strip ws- prefix if present
         const cleanId = applicantId.startsWith('ws-') ? applicantId.replace('ws-', '') : applicantId;
+        assignedWorkerId = cleanId;
         
         // Find applicant either in quest applicants or in users list
         const users = getSimulatedUsersList();
@@ -111,6 +163,21 @@ export const jobsApi = {
       return q;
     });
     saveSimulatedQuests(updated);
+
+    if (targetQuest && assignedWorkerId) {
+      const q: Quest = targetQuest;
+      addSimulatedNotification({
+        userId: assignedWorkerId,
+        title: `Lamaran Disetujui! 🎉`,
+        body: `Lamaran Anda disetujui oleh ${q.requester.username} untuk quest "${q.title}". Silakan mulai pengerjaan.`,
+        icon: '✅',
+        questId: q.id,
+        type: 'APPROVAL',
+        senderName: q.requester.username,
+        senderAvatar: q.requester.avatarUrl
+      });
+    }
+
     return { success: true };
   },
 
@@ -118,8 +185,10 @@ export const jobsApi = {
     const user = getSimulatedCurrentUser();
     if (!user) throw new Error("Must be logged in to take quest");
     const quests = getSimulatedQuests();
+    let targetQuest: Quest | null = null;
     const updated = quests.map(q => {
       if (q.id === jobId) {
+        targetQuest = q;
         return { 
           ...q, 
           status: 'IN_PROGRESS' as const, 
@@ -131,13 +200,32 @@ export const jobsApi = {
       return q;
     });
     saveSimulatedQuests(updated);
+
+    if (targetQuest) {
+      const q: Quest = targetQuest;
+      addSimulatedNotification({
+        userId: q.requester.id,
+        title: `Pekerja Mengambil Quest ⚔️`,
+        body: `${user.username} telah mengambil quest "${q.title}" untuk segera dikerjakan.`,
+        icon: '⚔️',
+        questId: q.id,
+        type: 'APPROVAL',
+        senderName: user.username,
+        senderAvatar: user.avatarUrl
+      });
+    }
+
     return { success: true };
   },
   
   submitProof: async (jobId: string, notes: string, link?: string) => {
+    const user = getSimulatedCurrentUser();
     const quests = getSimulatedQuests();
+    let targetQuest: Quest | null = null;
+
     const updated = quests.map(q => {
       if (q.id === jobId) {
+        targetQuest = q;
         return {
           ...q,
           status: 'ESCROW_LOCKED' as const,
@@ -155,6 +243,21 @@ export const jobsApi = {
       return q;
     });
     saveSimulatedQuests(updated);
+
+    if (targetQuest) {
+      const q: Quest = targetQuest;
+      addSimulatedNotification({
+        userId: q.requester.id,
+        title: `Bukti Pengerjaan Diserahkan 📦`,
+        body: `Worker ${user?.username || ''} telah menyerahkan bukti pekerjaan untuk "${q.title}". Silakan tinjau & setujui.`,
+        icon: '📦',
+        questId: q.id,
+        type: 'PROOF',
+        senderName: user?.username,
+        senderAvatar: user?.avatarUrl
+      });
+    }
+
     return { success: true };
   },
 
@@ -221,14 +324,55 @@ export const jobsApi = {
       return q;
     });
     saveSimulatedQuests(updated);
+
+    if (quest.assigneeId) {
+      addSimulatedNotification({
+        userId: quest.assigneeId,
+        title: `Dana Escrow Cair! 💰`,
+        body: `Hasil kerja Anda di quest "${quest.title}" telah disetujui. Bounty Rp ${quest.bounty.toLocaleString('id-ID')} masuk ke wallet Anda!`,
+        icon: '💰',
+        questId: quest.id,
+        type: 'APPROVED_WORK',
+        senderName: quest.requester.username,
+        senderAvatar: quest.requester.avatarUrl
+      });
+
+      addSimulatedActivityLog({
+        userId: quest.assigneeId,
+        type: 'PAYOUT_SUCCESS',
+        title: 'Pencairan Escrow Berhasil',
+        description: `Bounty Rp ${quest.bounty.toLocaleString('id-ID')} untuk quest "${quest.title}" telah masuk ke saldo dompet Anda.`,
+        amount: quest.bounty,
+        questId: quest.id,
+        category: 'PAYOUT',
+        status: 'SUCCESS',
+        icon: '💰'
+      });
+
+      addSimulatedActivityLog({
+        userId: quest.assigneeId,
+        type: 'QUEST_COMPLETED',
+        title: 'Quest Berhasil Diselesaikan',
+        description: `Pekerjaan quest "${quest.title}" disetujui oleh Requester (+250 EXP).`,
+        amount: quest.bounty,
+        questId: quest.id,
+        category: 'QUEST',
+        status: 'SUCCESS',
+        icon: '🎉'
+      });
+    }
+
     return { success: true };
   },
 
   fileDispute: async (jobId: string, reason: string) => {
     const user = getSimulatedCurrentUser();
     const quests = getSimulatedQuests();
+    let targetQuest: Quest | null = null;
+
     const updated = quests.map(q => {
       if (q.id === jobId) {
+        targetQuest = q;
         return {
           ...q,
           status: 'DISPUTED' as const,
@@ -242,10 +386,33 @@ export const jobsApi = {
       return q;
     });
     saveSimulatedQuests(updated);
+
+    if (targetQuest) {
+      const q: Quest = targetQuest;
+      const recipientId = user?.id === q.requester.id ? q.assigneeId : q.requester.id;
+      if (recipientId) {
+        addSimulatedNotification({
+          userId: recipientId,
+          title: `Dispute (Sengketa) Diajukan ⚠️`,
+          body: `Pihak ${user?.username || ''} mengajukan dispute untuk quest "${q.title}". Silakan periksa detailnya.`,
+          icon: '⚠️',
+          questId: q.id,
+          type: 'DISPUTE',
+          senderName: user?.username,
+          senderAvatar: user?.avatarUrl
+        });
+      }
+    }
+
     return { success: true };
   },
 
   resolveDispute: async (jobId: string, decision: 'WORKER_WON' | 'REQUESTER_WON') => {
+    const currentUser = getSimulatedCurrentUser();
+    if (currentUser?.role !== 'admin' && currentUser?.id !== 'demo-admin') {
+      throw new Error("Hanya Administrator yang berwenang menyelesaikan dispute.");
+    }
+
     const quests = getSimulatedQuests();
     const quest = quests.find(q => q.id === jobId);
     if (!quest) throw new Error("Quest not found");

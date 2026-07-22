@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Shield, Users, Briefcase, AlertOctagon, Wallet, Coins, 
   Trash2, Ban, Check, X, Star, ArrowUpRight, Search, 
-  CheckCircle, ShieldAlert, Award, UserCheck
+  CheckCircle, ShieldAlert, Award, UserCheck, RotateCcw, Undo2, XCircle
 } from 'lucide-react';
 import { Quest, UserProfile } from '../types';
 import { 
@@ -11,7 +11,9 @@ import {
   getSimulatedUsersList, 
   saveSimulatedUsersList,
   getSimulatedCurrentUser,
-  setSimulatedCurrentUser
+  setSimulatedCurrentUser,
+  addSimulatedNotification,
+  addSimulatedActivityLog
 } from '../api/mockStorage';
 
 interface AdminDashboardProps {
@@ -29,6 +31,24 @@ export default function AdminDashboard({ onRefreshQuests }: AdminDashboardProps)
   const [topUpAmount, setTopUpAmount] = useState('');
   const [editRating, setEditRating] = useState('');
   const [editLevel, setEditLevel] = useState('');
+
+  // Modal & Toast States for iframe compatibility
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    type: 'CANCEL_REFUND' | 'DELETE_QUEST' | 'DELETE_USER';
+    targetId: string;
+    title: string;
+    message: string;
+    confirmText: string;
+    isDanger?: boolean;
+  } | null>(null);
+
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 4000);
+  };
 
   useEffect(() => {
     loadData();
@@ -125,29 +145,165 @@ export default function AdminDashboard({ onRefreshQuests }: AdminDashboardProps)
     
     // Refresh local lists & app lists
     handleRefresh();
-    alert(`Dispute berhasil diselesaikan! Keputusan: ${decision === 'WORKER_WON' ? 'Dana dilepaskan ke Worker' : 'Dana direfund ke Requester'}.`);
+    showToast(`Dispute berhasil diselesaikan! Keputusan: ${decision === 'WORKER_WON' ? 'Dana dilepaskan ke Worker' : 'Dana direfund ke Requester'}.`);
   };
 
-  // Delete Quest Action
-  const handleDeleteQuest = (questId: string) => {
-    if (!window.confirm("Apakah Anda yakin ingin menghapus quest/pekerjaan ini secara permanen dari database?")) return;
-
+  // Open Confirmation Modal for Cancelling & Refunding Quest
+  const handleCancelAndRefundQuest = (questId: string) => {
     const quest = quests.find(q => q.id === questId);
-    if (quest && (quest.escrowStatus === 'DEPOSITED' || quest.status === 'DISPUTED')) {
-      // Refund funds to requester on deletion if escrowed
+    if (!quest) return;
+
+    if (quest.status === 'COMPLETED') {
+      showToast("Quest ini sudah selesai dan tidak dapat dibatalkan.");
+      return;
+    }
+
+    if (quest.status === 'CANCELLED' || quest.escrowStatus === 'REFUNDED') {
+      showToast("Quest ini sudah dibatalkan atau depositnya telah dikembalikan.");
+      return;
+    }
+
+    setConfirmModal({
+      isOpen: true,
+      type: 'CANCEL_REFUND',
+      targetId: questId,
+      title: 'Batalkan Quest & Refund Deposit',
+      message: `Batalkan quest "${quest.title}" dan kembalikan dana deposit Rp ${quest.bounty.toLocaleString('id-ID')} ke dompet ${quest.requester.username}?`,
+      confirmText: 'Ya, Batalkan & Refund',
+      isDanger: false
+    });
+  };
+
+  // Execute Cancel & Refund Quest
+  const executeCancelAndRefundQuest = (questId: string) => {
+    const quest = quests.find(q => q.id === questId);
+    if (!quest) return;
+
+    let updatedUsers = [...users];
+    const requesterId = quest.requester.id;
+    const cleanReqId = requesterId.replace(/^ws-/, '');
+
+    // Refund deposit to requester balance
+    updatedUsers = updatedUsers.map(u => {
+      if (u.id === requesterId || u.id === cleanReqId || `ws-${u.id}` === requesterId) {
+        return {
+          ...u,
+          walletBalance: u.walletBalance + quest.bounty
+        };
+      }
+      return u;
+    });
+
+    saveSimulatedUsersList(updatedUsers);
+
+    // Sync logged-in user if affected
+    const curUser = getSimulatedCurrentUser();
+    if (curUser && (curUser.id === requesterId || curUser.id === cleanReqId || `ws-${curUser.id}` === requesterId)) {
+      const updatedCur = updatedUsers.find(u => u.id === curUser.id);
+      if (updatedCur) setSimulatedCurrentUser(updatedCur);
+    }
+
+    // Add activity log & notification for the requester
+    addSimulatedActivityLog({
+      userId: requesterId,
+      type: 'PAYOUT_SUCCESS',
+      title: 'Pengembalian Deposit Escrow',
+      description: `Dana deposit Rp ${quest.bounty.toLocaleString('id-ID')} untuk quest "${quest.title}" telah dikembalikan ke dompet Anda oleh Administrator.`,
+      amount: quest.bounty,
+      questId: quest.id,
+      category: 'PAYOUT',
+      status: 'SUCCESS',
+      icon: '💰'
+    });
+
+    addSimulatedNotification({
+      userId: requesterId,
+      title: 'Refund Escrow Diproses Admin',
+      body: `Quest "${quest.title}" telah dibatalkan oleh Admin dan saldo deposit Rp ${quest.bounty.toLocaleString('id-ID')} telah dikembalikan ke dompet Anda.`,
+      icon: '💰',
+      type: 'SYSTEM',
+      questId: quest.id
+    });
+
+    // Update quest status
+    const updatedQuests = quests.map(q => {
+      if (q.id === questId) {
+        return {
+          ...q,
+          status: 'CANCELLED' as const,
+          escrowStatus: 'REFUNDED' as const
+        };
+      }
+      return q;
+    });
+
+    saveSimulatedQuests(updatedQuests);
+    handleRefresh();
+    showToast(`Berhasil membatalkan quest! Saldo deposit Rp ${quest.bounty.toLocaleString('id-ID')} dikembalikan ke ${quest.requester.username}.`);
+  };
+
+  // Open Confirmation Modal for Deleting Quest
+  const handleDeleteQuest = (questId: string) => {
+    const quest = quests.find(q => q.id === questId);
+    if (!quest) return;
+
+    const isEscrowed = quest.escrowStatus === 'DEPOSITED' || quest.escrowStatus === 'LOCKED' || quest.status === 'OPEN' || quest.status === 'IN_PROGRESS';
+    const message = isEscrowed
+      ? `Hapus quest "${quest.title}" secara permanen? Dana deposit Rp ${quest.bounty.toLocaleString('id-ID')} akan otomatis dikembalikan ke dompet ${quest.requester.username}.`
+      : `Apakah Anda yakin ingin menghapus quest "${quest.title}" secara permanen dari database?`;
+
+    setConfirmModal({
+      isOpen: true,
+      type: 'DELETE_QUEST',
+      targetId: questId,
+      title: 'Hapus Quest Permanen',
+      message,
+      confirmText: 'Ya, Hapus Permanen',
+      isDanger: true
+    });
+  };
+
+  // Execute Delete Quest
+  const executeDeleteQuest = (questId: string) => {
+    const quest = quests.find(q => q.id === questId);
+    if (!quest) return;
+
+    const isEscrowed = quest.escrowStatus === 'DEPOSITED' || quest.escrowStatus === 'LOCKED' || quest.status === 'OPEN' || quest.status === 'IN_PROGRESS';
+
+    if (isEscrowed) {
+      const requesterId = quest.requester.id;
+      const cleanReqId = requesterId.replace(/^ws-/, '');
+
       const updatedUsers = users.map(u => {
-        if (u.id === quest.requester.id) {
+        if (u.id === requesterId || u.id === cleanReqId || `ws-${u.id}` === requesterId) {
           return { ...u, walletBalance: u.walletBalance + quest.bounty };
         }
         return u;
       });
       saveSimulatedUsersList(updatedUsers);
+
+      const curUser = getSimulatedCurrentUser();
+      if (curUser && (curUser.id === requesterId || curUser.id === cleanReqId || `ws-${curUser.id}` === requesterId)) {
+        const updatedCur = updatedUsers.find(u => u.id === curUser.id);
+        if (updatedCur) setSimulatedCurrentUser(updatedCur);
+      }
+
+      addSimulatedActivityLog({
+        userId: requesterId,
+        type: 'PAYOUT_SUCCESS',
+        title: 'Pengembalian Deposit Escrow (Hapus Quest)',
+        description: `Pengembalian dana deposit Rp ${quest.bounty.toLocaleString('id-ID')} karena quest "${quest.title}" dihapus oleh Admin.`,
+        amount: quest.bounty,
+        category: 'PAYOUT',
+        status: 'SUCCESS',
+        icon: '💰'
+      });
     }
 
     const filtered = quests.filter(q => q.id !== questId);
     saveSimulatedQuests(filtered);
     handleRefresh();
-    alert("Quest berhasil dihapus & dana escrow (bila ada) telah dikembalikan.");
+    showToast("Quest berhasil dihapus & dana deposit escrow (bila ada) telah dikembalikan!");
   };
 
   // Users Manager Actions
@@ -695,13 +851,25 @@ export default function AdminDashboard({ onRefreshQuests }: AdminDashboardProps)
                       {q.escrowStatus || 'UNPAID'}
                     </td>
                     <td className="p-4 text-center">
-                      <button
-                        onClick={() => handleDeleteQuest(q.id)}
-                        className="bg-red-500/10 hover:bg-red-500/20 text-red-400 font-bold p-2 rounded-lg transition-colors cursor-pointer"
-                        title="Hapus Quest"
-                      >
-                        <Trash2 size={15} />
-                      </button>
+                      <div className="flex items-center justify-center gap-1.5">
+                        {q.status !== 'COMPLETED' && q.status !== 'CANCELLED' && q.escrowStatus !== 'REFUNDED' && (
+                          <button
+                            onClick={() => handleCancelAndRefundQuest(q.id)}
+                            className="bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-[#f0c040] font-bold px-2.5 py-1.5 rounded-lg text-[11px] transition-colors cursor-pointer flex items-center gap-1"
+                            title="Batalkan Quest & Refund Deposit Escrow"
+                          >
+                            <Undo2 size={13} />
+                            Batalkan & Refund
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleDeleteQuest(q.id)}
+                          className="bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 font-bold p-1.5 rounded-lg transition-colors cursor-pointer"
+                          title="Hapus Quest Permanen"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -718,6 +886,64 @@ export default function AdminDashboard({ onRefreshQuests }: AdminDashboardProps)
         )}
 
       </div>
+
+      {/* Custom Confirmation Modal for iframe compatibility */}
+      {confirmModal && confirmModal.isOpen && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#2a3256] border border-[#3e4875] rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 relative animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-[#3e4875]">
+              <div className="flex items-center gap-2 text-white font-bold text-lg">
+                <AlertOctagon className={confirmModal.isDanger ? "text-red-400" : "text-[#f0c040]"} size={22} />
+                {confirmModal.title}
+              </div>
+              <button 
+                onClick={() => setConfirmModal(null)}
+                className="text-[#8b93b8] hover:text-white transition-colors cursor-pointer"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <p className="text-sm text-[#c8cee8] leading-relaxed">
+              {confirmModal.message}
+            </p>
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#3e4875]/60">
+              <button
+                onClick={() => setConfirmModal(null)}
+                className="px-4 py-2 rounded-lg bg-[#3a4475] hover:bg-[#434e80] text-white text-sm font-semibold transition-colors cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                onClick={() => {
+                  const { type, targetId } = confirmModal;
+                  setConfirmModal(null);
+                  if (type === 'CANCEL_REFUND') executeCancelAndRefundQuest(targetId);
+                  else if (type === 'DELETE_QUEST') executeDeleteQuest(targetId);
+                }}
+                className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors cursor-pointer flex items-center gap-1.5 ${
+                  confirmModal.isDanger 
+                    ? 'bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/20' 
+                    : 'bg-[#f0c040] hover:bg-amber-400 text-[#1b203e] shadow-lg shadow-[#f0c040]/20'
+                }`}
+              >
+                {confirmModal.confirmText}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 bg-[#2b335a] border-2 border-[#f0c040] text-white px-5 py-3.5 rounded-xl shadow-2xl flex items-center gap-3">
+          <CheckCircle className="text-[#2bb5a0]" size={20} />
+          <span className="text-sm font-semibold">{toastMessage}</span>
+          <button onClick={() => setToastMessage(null)} className="text-[#8b93b8] hover:text-white ml-2 cursor-pointer">
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
     </div>
   );
 }

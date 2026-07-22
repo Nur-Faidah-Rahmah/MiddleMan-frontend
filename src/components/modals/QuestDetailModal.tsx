@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useAuth } from '../../context/AuthContext';
 import { 
   X, Coins, Clock, UploadCloud, CheckCircle, 
   AlertTriangle, Gavel, Key, FileText, UserCheck, 
@@ -35,6 +36,9 @@ export function QuestDetailModal({
   onUserClick
 }: QuestDetailModalProps) {
   
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin' || user?.id === 'demo-admin';
+
   const isOwner = quest.requester.id === currentUserId;
   const isAssignee = quest.assigneeId === currentUserId;
   const hasApplied = quest.applicants?.some(a => a.id === currentUserId);
@@ -496,33 +500,44 @@ export function QuestDetailModal({
                   </p>
                 </div>
 
-                {/* Simulated Admin Control Center - Perfect for showcasing the full workflow */}
-                <div className="bg-[#1a1f3c] border-2 border-[#ff5c5c]/20 rounded-xl p-5 space-y-3">
-                  <h5 className="text-[#ff7878] font-extrabold text-xs flex items-center gap-1.5 uppercase">
-                    <ShieldAlert className="w-4 h-4 text-red-400" /> Simulator Panel: Keputusan Arbitrase Admin
-                  </h5>
-                  <p className="text-[#8b93b8] text-[10px] leading-relaxed">
-                    Sesuai workflow bagan, Admin meninjau bukti tak terbantahkan (immutable logs) dari SnK kontrak di SideQuest, lalu menetapkan keputusan final:
-                  </p>
+                {/* Admin Control Center - Restricted to Admin users only */}
+                {isAdmin ? (
+                  <div className="bg-[#1a1f3c] border-2 border-[#ff5c5c]/20 rounded-xl p-5 space-y-3">
+                    <h5 className="text-[#ff7878] font-extrabold text-xs flex items-center gap-1.5 uppercase">
+                      <ShieldAlert className="w-4 h-4 text-red-400" /> Panel Arbitrase Admin: Ambil Keputusan
+                    </h5>
+                    <p className="text-[#8b93b8] text-[10px] leading-relaxed">
+                      Sesuai ketentuan platform, Administrator meninjau bukti pengerjaan dan alasan dispute, lalu menetapkan keputusan final:
+                    </p>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                    <button 
-                      onClick={() => onResolveDispute(quest.id, 'WORKER_WON')}
-                      className="bg-[#2bb5a0] hover:bg-[#239987] text-white font-bold text-xs py-2.5 px-4 rounded-xl transition-all flex flex-col items-center justify-center gap-1 cursor-pointer shadow-md"
-                    >
-                      <span className="font-bold">Kabulkan Banding Worker</span>
-                      <span className="text-[9px] opacity-80 font-normal text-center">Dana Escrow dilepas ke saldo pekerja</span>
-                    </button>
-                    
-                    <button 
-                      onClick={() => onResolveDispute(quest.id, 'REQUESTER_WON')}
-                      className="bg-[#ff5c5c] hover:bg-[#ff4444] text-white font-bold text-xs py-2.5 px-4 rounded-xl transition-all flex flex-col items-center justify-center gap-1 cursor-pointer shadow-md"
-                    >
-                      <span className="font-bold">Kabulkan Klaim Requester</span>
-                      <span className="text-[9px] opacity-80 font-normal text-center">Kontrak dibatalkan & dana escrow direfund</span>
-                    </button>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                      <button 
+                        onClick={() => onResolveDispute(quest.id, 'WORKER_WON')}
+                        className="bg-[#2bb5a0] hover:bg-[#239987] text-white font-bold text-xs py-2.5 px-4 rounded-xl transition-all flex flex-col items-center justify-center gap-1 cursor-pointer shadow-md"
+                      >
+                        <span className="font-bold">Kabulkan Banding Worker</span>
+                        <span className="text-[9px] opacity-80 font-normal text-center">Dana Escrow dilepas ke saldo pekerja</span>
+                      </button>
+                      
+                      <button 
+                        onClick={() => onResolveDispute(quest.id, 'REQUESTER_WON')}
+                        className="bg-[#ff5c5c] hover:bg-[#ff4444] text-white font-bold text-xs py-2.5 px-4 rounded-xl transition-all flex flex-col items-center justify-center gap-1 cursor-pointer shadow-md"
+                      >
+                        <span className="font-bold">Kabulkan Klaim Requester</span>
+                        <span className="text-[9px] opacity-80 font-normal text-center">Kontrak dibatalkan & dana escrow direfund</span>
+                      </button>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="bg-[#1a1f3c] border border-amber-500/30 rounded-xl p-4 text-center space-y-2">
+                    <p className="text-xs font-bold text-[#f0c040] flex items-center justify-center gap-1.5">
+                      <ShieldAlert className="w-4 h-4" /> Menunggu Keputusan Arbitrase Admin
+                    </p>
+                    <p className="text-[11px] text-[#c8cee8] leading-relaxed">
+                      Sengketa ini sedang ditinjau oleh Administrator. Hanya Admin yang dapat mengambil keputusan final untuk merilis dana escrow atau mengembalikan saldo ke Requester.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 
